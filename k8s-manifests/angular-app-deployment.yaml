@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: angular-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: angular-app
+  template:
+    metadata:
+      labels:
+        app: angular-app
+    spec:
+      containers:
+      - name: angular-app
+        image: rahulrvc.jfrog.io/rahul-repo/a900001/frontend-a900001:2.5
+        ports:
+        - containerPort: 80
+        env:
+        - name: API_BASE_URL
+          value: "http://a852b0ed786f94403960b1c6db40edb5-1155958163.ap-south-1.elb.amazonaws.com:4000/"
+      imagePullSecrets:
+        - name: jfrog-registry-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: angular-app
+spec:
+  type: NodePort
+  selector:
+    app: angular-app
+  ports:
+    - protocol: TCP
+      port: 4200
+      targetPort: 80
+      nodePort: 31200

@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  angular-app:
+    image: rahulrvc.jfrog.io/rahul-repo/a900001/frontend-a900001:2.1
+    ports:
+      - "4200:80"
+    depends_on:
+      - fmts-nodejs
+      - spring-app
+  # network_mode removed to use default bridge network
+    environment:
+      API_BASE_URL: http://mid-nodejs:4000/
+
+
+  fmts-nodejs:
+    image: rahulrvc.jfrog.io/rahul-repo/a900001/fmts-a900001:1.2
+    ports:
+      - "3000:3000"
+  # network_mode removed to use default bridge network
+
+  mid-nodejs:
+    image: rahulrvc.jfrog.io/rahul-repo/a900001/midtier-a900001:1.6
+    ports:
+      - "4000:4000"
+    depends_on:
+      - spring-app
+      - fmts-nodejs
+  # network_mode removed to use default bridge network
+    environment:
+      BACKEND_URL: http://spring-app:8080/
+
+  spring-app:
+    image: rahulrvc.jfrog.io/rahul-repo/a900001/backend-a900001:2.0
+    ports:
+      - "8080:8080"
+    depends_on:
+      - fmts-nodejs
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:oracle:thin:@trade-marshals-db.cj6ui28e0bu9.ap-south-1.rds.amazonaws.com:1521/ORCL
+      SPRING_DATASOURCE_USERNAME: admin
+      SPRING_DATASOURCE_PASSWORD: SR2024fmr
+      FMTS_URL: http://fmts-nodejs:3000/fmts
+  # network_mode removed to use default bridge network

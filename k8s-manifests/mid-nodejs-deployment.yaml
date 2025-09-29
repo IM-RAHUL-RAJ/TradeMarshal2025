@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mid-nodejs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mid-nodejs
+  template:
+    metadata:
+      labels:
+        app: mid-nodejs
+    spec:
+      containers:
+      - name: mid-nodejs
+        image: rahulrvc.jfrog.io/rahul-repo/a900001/midtier-a900001:2.6
+        ports:
+        - containerPort: 4000
+        env:
+        - name: BACKEND_URL
+          # value: "http://spring-app:8080/",
+          value: "http://a012288d25cc14600a55bd65ec5e1329-819930508.ap-south-1.elb.amazonaws.com:8080/"
+      imagePullSecrets:
+        - name: jfrog-registry-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mid-nodejs
+spec:
+  type: ClusterIP
+  selector:
+    app: mid-nodejs
+  ports:
+    - protocol: TCP
+      port: 4000
+      targetPort: 4000
