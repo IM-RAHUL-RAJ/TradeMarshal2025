@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: angular-app-svc
+spec:
+  type: ClusterIP
+  selector:
+    app: angular-app
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mid-nodejs-svc
+spec:
+  type: ClusterIP
+  selector:
+    app: mid-nodejs
+  ports:
+    - protocol: TCP
+      port: 4000
+      targetPort: 4000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spring-app-svc
+spec:
+  type: ClusterIP
+  selector:
+    app: spring-app
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fmts-nodejs-svc
+spec:
+  type: ClusterIP
+  selector:
+    app: fmts-nodejs
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 3000

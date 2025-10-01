@@ -25,8 +25,7 @@ spec:
         - name: SPRING_DATASOURCE_PASSWORD
           value: "SR2024fmr"
         - name: FMTS_URL
-          # value: "http://fmts-nodejs:3000/fmts"
-          value: "http://a5a44ab9e82ca43c89b08d747204d116-117806422.ap-south-1.elb.amazonaws.com:3000/fmts"
+          value: "http://fmts-nodejs:3000/fmts"
       imagePullSecrets:
         - name: jfrog-registry-secret
 ---

@@ -1,0 +1,34 @@
+# Updated Environment Configuration for Ingress Setup
+
+## For Path-based Routing (ingress.yaml)
+# Update your Angular environment files to use:
+export const environment = {
+  production: true,
+  apiBaseUrl: 'http://<ALB_DNS>/api/'  // Will be provided after ingress deployment
+};
+
+## For Host-based Routing (ingress-hosts.yaml)
+# Update your Angular environment files to use:
+export const environment = {
+  production: true,
+  apiBaseUrl: 'http://api.trademarshals.com/'  // You'll need to configure DNS
+};
+
+## Updated Kubernetes Deployment Environment Variables
+
+### Angular App Deployment
+env:
+- name: API_BASE_URL
+  value: "http://<ALB_DNS>/api/"  # For path-based routing
+  # OR
+  # value: "http://api.trademarshals.com/"  # For host-based routing
+
+### Midtier Deployment
+env:
+- name: BACKEND_URL
+  value: "http://spring-app-svc:8080/"  # Internal service communication
+
+### Spring Boot Deployment
+env:
+- name: FMTS_URL
+  value: "http://fmts-nodejs-svc:3000/fmts"  # Internal service communication

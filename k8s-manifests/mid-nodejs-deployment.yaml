@@ -14,15 +14,14 @@ spec:
     spec:
       containers:
       - name: mid-nodejs
-        image: rahulrvc.jfrog.io/rahul-repo/a900001/midtier-a900001:2.6
+        image: cloudminds.jfrog.io/cloud2025/midtier-a900001:2.7
         ports:
         - containerPort: 4000
         env:
         - name: BACKEND_URL
-          # value: "http://spring-app:8080/",
-          value: "http://a012288d25cc14600a55bd65ec5e1329-819930508.ap-south-1.elb.amazonaws.com:8080/"
+          value: "http://spring-app:8080/"
       imagePullSecrets:
-        - name: jfrog-registry-secret
+        - name: cloudminds-secret
 ---
 apiVersion: v1
 kind: Service

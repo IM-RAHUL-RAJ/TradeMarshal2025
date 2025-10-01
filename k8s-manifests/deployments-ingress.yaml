@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: angular-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: angular-app
+  template:
+    metadata:
+      labels:
+        app: angular-app
+    spec:
+      containers:
+      - name: angular-app
+        image: rahulrvc.jfrog.io/rahul-repo/a900001/frontend-a900001:2.5
+        ports:
+        - containerPort: 80
+        env:
+        - name: API_BASE_URL
+          value: "http://REPLACE_WITH_ALB_DNS/api/"  # Update after ingress deployment
+      imagePullSecrets:
+        - name: jfrog-registry-secret
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mid-nodejs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mid-nodejs
+  template:
+    metadata:
+      labels:
+        app: mid-nodejs
+    spec:
+      containers:
+      - name: mid-nodejs
+        image: rahulrvc.jfrog.io/rahul-repo/a900001/midtier-a900001:2.5
+        ports:
+        - containerPort: 4000
+        env:
+        - name: BACKEND_URL
+          value: "http://spring-app-svc:8080/"  # Internal service communication
+      imagePullSecrets:
+        - name: jfrog-registry-secret
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spring-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spring-app
+  template:
+    metadata:
+      labels:
+        app: spring-app
+    spec:
+      containers:
+      - name: spring-app
+        image: rahulrvc.jfrog.io/rahul-repo/a900001/backend-a900001:2.5
+        ports:
+        - containerPort: 8080
+        env:
+        - name: SPRING_DATASOURCE_URL
+          value: "jdbc:oracle:thin:@trade-marshals-db.cj6ui28e0bu9.ap-south-1.rds.amazonaws.com:1521/ORCL"
+        - name: SPRING_DATASOURCE_USERNAME
+          value: "admin"
+        - name: SPRING_DATASOURCE_PASSWORD
+          value: "SR2024fmr"
+        - name: FMTS_URL
+          value: "http://fmts-nodejs-svc:3000/fmts"  # Internal service communication
+      imagePullSecrets:
+        - name: jfrog-registry-secret
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fmts-nodejs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fmts-nodejs
+  template:
+    metadata:
+      labels:
+        app: fmts-nodejs
+    spec:
+      containers:
+      - name: fmts-nodejs
+        image: rahulrvc.jfrog.io/rahul-repo/a900001/fmts-a900001:1.2
+        ports:
+        - containerPort: 3000
+      imagePullSecrets:
+        - name: jfrog-registry-secret
