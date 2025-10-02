@@ -52,13 +52,21 @@ usage() {
   exit 1
 }
 
+require_value() {
+  local opt="$1" val="$2"
+  if [[ -z "$val" || "$val" =~ ^- ]]; then
+    echo "[ERROR] Option $opt requires a value" >&2
+    exit 1
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -c) CLUSTER_NAME="$2"; shift 2 ;;
-    -r) REGION="$2"; shift 2 ;;
-    -v) VPC_ID="$2"; shift 2 ;;
-    -p) POLICY_NAME="$2"; shift 2 ;;
-    -n) NAMESPACE="$2"; shift 2 ;;
+    -c) require_value -c "${2:-}"; CLUSTER_NAME="$2"; shift 2 ;;
+    -r) require_value -r "${2:-}"; REGION="$2"; shift 2 ;;
+    -v) require_value -v "${2:-}"; VPC_ID="$2"; shift 2 ;;
+    -p) require_value -p "${2:-}"; POLICY_NAME="$2"; shift 2 ;;
+    -n) require_value -n "${2:-}"; NAMESPACE="$2"; shift 2 ;;
     --no-subnet-check) SUBNET_CHECK=0; shift ;;
     --force-reinstall) FORCE_REINSTALL=1; shift ;;
     --extra-arg)
