@@ -1,6 +1,6 @@
 export const environment = {
   production: false,
-  // Base API path now routed via Ingress at /api
-  apiBaseUrl: '/api/'
+  // Base API path pointing to midtier service
+  apiBaseUrl: 'http://localhost:4000/api/'
 
 };

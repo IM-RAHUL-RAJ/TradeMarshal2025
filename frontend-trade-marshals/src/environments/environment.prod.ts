@@ -1,5 +1,5 @@
 export const environment = {
   production: true,
-  // Use relative path so same origin works behind Ingress
-  apiBaseUrl: '/api/'
+  // Base API path pointing to midtier service
+  apiBaseUrl: 'http://localhost:4000/api/'
 };
