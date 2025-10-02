@@ -310,6 +310,8 @@ services:"""
                                 --name spring-app \\
                                 --network trademarshals-network-${BUILD_NUMBER} \\
                                 -p 8080:8080 \\
+                                --dns=8.8.8.8 \\
+                                --dns=8.8.4.4 \\
                                 -e FMTS_URL=http://fmts-nodejs:3000/fmts \\
                                 --restart unless-stopped \\
                                 trademarshals/backend:${IMAGE_TAG}
