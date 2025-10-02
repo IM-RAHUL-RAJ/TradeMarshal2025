@@ -2,7 +2,9 @@
 
 # install-aws-load-balancer-controller.sh
 # Purpose: Idempotent installer for AWS Load Balancer Controller (ALB Ingress Controller)
-# Usage: ./scripts/install-aws-load-balancer-controller.sh -c <cluster-name> -r <region> [-v <vpc-id>] [-p <policy-name>] [-n <namespace>] [--no-subnet-check] [--force-reinstall] [--extra-arg key=value]
+# Usage: ./scripts/install-aws-load-balancer-controller.sh -c <cluster-name> -r <region> [-v <vpc-id>] [-p <policy-name>] [-n <namespace>] \
+#        [--no-subnet-check] [--force-reinstall] [--extra-arg key=value] [--auto-tag-public-subnets] \
+#        [--subnet-ids subnet-1,subnet-2] [--annotate-ingress <ingress-name>] [--ingress-namespace <ns>]
 # Requires: aws, kubectl, helm, jq (eksctl optional for automated OIDC + IRSA)
 # Features:
 #  * Infers cluster name, region, VPC ID if omitted (from current kube context / EKS API)
@@ -46,6 +48,10 @@ NAMESPACE="$DEFAULT_NAMESPACE"
 SUBNET_CHECK=1
 FORCE_REINSTALL=0
 EXTRA_ARGS=()
+AUTO_TAG_PUBLIC=0
+EXPLICIT_SUBNET_IDS=""
+ANNOTATE_INGRESS=""
+INGRESS_NAMESPACE="default"
 
 usage() {
   grep '^#' "$0" | sed 's/^# //'
@@ -67,7 +73,7 @@ while [[ $# -gt 0 ]]; do
     -v) require_value -v "${2:-}"; VPC_ID="$2"; shift 2 ;;
     -p) require_value -p "${2:-}"; POLICY_NAME="$2"; shift 2 ;;
     -n) require_value -n "${2:-}"; NAMESPACE="$2"; shift 2 ;;
-    --no-subnet-check) SUBNET_CHECK=0; shift ;;
+  --no-subnet-check) SUBNET_CHECK=0; shift ;;
     --force-reinstall) FORCE_REINSTALL=1; shift ;;
     --extra-arg)
         if [[ -z "${2:-}" || "$2" != *=* ]]; then
@@ -76,6 +82,13 @@ while [[ $# -gt 0 ]]; do
         EXTRA_ARGS+=("$2"); shift 2 ;;
     --extra-arg=*)
         EXTRA_ARGS+=("${1#*=}"); shift ;;
+  --auto-tag-public-subnets) AUTO_TAG_PUBLIC=1; shift ;;
+  --subnet-ids)
+    require_value --subnet-ids "${2:-}"; EXPLICIT_SUBNET_IDS="$2"; shift 2 ;;
+  --annotate-ingress)
+    require_value --annotate-ingress "${2:-}"; ANNOTATE_INGRESS="$2"; shift 2 ;;
+  --ingress-namespace)
+    require_value --ingress-namespace "${2:-}"; INGRESS_NAMESPACE="$2"; shift 2 ;;
     -h|--help) usage ;;
     --) shift; break ;;
     -*) echo "[ERROR] Unknown option: $1" >&2; usage ;;
@@ -180,6 +193,29 @@ else
   echo "[INFO] Skipping subnet tag validation (user disabled)."
 fi
 
+# --- Optional subnet tagging / selection ---
+if [[ $AUTO_TAG_PUBLIC -eq 1 ]]; then
+  echo "[INFO] Auto-tagging public subnets in VPC $VPC_ID (kubernetes.io/role/elb=1)";
+  PUB_SUBNETS=$(aws ec2 describe-subnets --region "$REGION" --filters "Name=vpc-id,Values=$VPC_ID" --query 'Subnets[?MapPublicIpOnLaunch==`true`].SubnetId' --output text 2>/dev/null || true)
+  if [[ -z "$PUB_SUBNETS" ]]; then
+    echo "[WARN] No public subnets discovered for auto-tagging." >&2
+  else
+    for S in $PUB_SUBNETS; do
+      echo "[INFO] Tagging subnet $S for cluster + elb role"
+      aws ec2 create-tags --region "$REGION" --resources "$S" --tags \
+        Key=kubernetes.io/cluster/$CLUSTER_NAME,Value=shared \
+        Key=kubernetes.io/role/elb,Value=1 >/dev/null || true
+    done
+  fi
+fi
+
+ANNOTATION_SUBNET_LIST=""
+if [[ -n "$EXPLICIT_SUBNET_IDS" ]]; then
+  # Normalize commas (remove spaces)
+  ANNOTATION_SUBNET_LIST=$(echo "$EXPLICIT_SUBNET_IDS" | tr -d ' ')
+  echo "[INFO] Will annotate ingress with explicit subnets: $ANNOTATION_SUBNET_LIST"
+fi
+
 echo "[INFO] Adding Helm repo $REPO_NAME if needed..."
 if ! helm repo list | grep -q "\b$REPO_NAME\b"; then
   helm repo add "$REPO_NAME" "$REPO_URL"
@@ -231,6 +267,12 @@ POD=$(kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/name=aws-load-balanc
 if [[ -n "$POD" ]]; then
   echo "[INFO] Recent controller log lines (tail 25):"
   kubectl logs "$POD" -n "$NAMESPACE" --tail=25 2>/dev/null || true
+fi
+
+if [[ -n "$ANNOTATE_INGRESS" && -n "$ANNOTATION_SUBNET_LIST" ]]; then
+  echo "[INFO] Annotating ingress $ANNOTATE_INGRESS in namespace $INGRESS_NAMESPACE with subnet list"
+  kubectl annotate ingress "$ANNOTATE_INGRESS" -n "$INGRESS_NAMESPACE" \
+    alb.ingress.kubernetes.io/subnets="$ANNOTATION_SUBNET_LIST" --overwrite || echo "[WARN] Failed to annotate ingress (ensure it exists)." >&2
 fi
 
 echo "[INFO] Installed successfully. Validate with: kubectl get ingressclasses; kubectl get ingress"

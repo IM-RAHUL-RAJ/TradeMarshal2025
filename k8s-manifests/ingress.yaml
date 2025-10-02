@@ -11,6 +11,7 @@ metadata:
     # alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
     # alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:REGION:ACCOUNT:certificate/XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
 spec:
+  ingressClassName: alb  # Explicit class for AWS Load Balancer Controller
   rules:
     - http:
         paths:
@@ -31,3 +32,6 @@ spec:
 
 # Public exposure minimized to UI and mid-tier API.
 # Spring and fmts remain internal (reachable via service DNS: spring-app, fmts-nodejs).
+
+
+# midtier- backend - fmts (servioce names)
