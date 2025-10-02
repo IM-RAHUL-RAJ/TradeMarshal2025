@@ -275,17 +275,17 @@ services:"""
                 echo "🚀 Deploying services with Docker Compose..."
                 script {
                     // Stop any existing deployment
-                    sh "docker-compose -p ${COMPOSE_PROJECT_NAME} down --remove-orphans || true"
+                    sh "docker compose -p ${COMPOSE_PROJECT_NAME} down --remove-orphans || true"
                     
                     // Start services (no pull needed since images are local)
-                    sh "docker-compose -p ${COMPOSE_PROJECT_NAME} up -d"
+                    sh "docker compose -p ${COMPOSE_PROJECT_NAME} up -d"
                     
                     // Wait for services to be ready
                     echo "⏳ Waiting for services to start..."
                     sleep(time: 30, unit: 'SECONDS')
                     
                     // Show running containers
-                    sh "docker-compose -p ${COMPOSE_PROJECT_NAME} ps"
+                    sh "docker compose -p ${COMPOSE_PROJECT_NAME} ps"
                 }
             }
         }
@@ -358,8 +358,8 @@ services:"""
 
                     echo """
 🔧 Management Commands:
-  - View logs:     docker-compose -p ${COMPOSE_PROJECT_NAME} logs -f
-  - Stop services: docker-compose -p ${COMPOSE_PROJECT_NAME} down
+  - View logs:     docker compose -p ${COMPOSE_PROJECT_NAME} logs -f
+  - Stop services: docker compose -p ${COMPOSE_PROJECT_NAME} down
 
 ✅ All services are running locally!
 """
