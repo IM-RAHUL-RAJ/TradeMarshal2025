@@ -348,38 +348,61 @@ services:
     post {
         always {
             echo "🧹 Cleaning up build artifacts..."
-            // Clean up Docker build cache
-            sh "docker system prune -f --filter until=24h || true"
+            
+            script {
+                // Show build summary
+                echo """
+📊 FINAL BUILD SUMMARY:
+✅ Successful builds: ${env.SUCCESSFUL_BUILDS ?: 'none'}
+❌ Failed builds: ${env.FAILED_BUILDS ?: 'none'}
+🚀 Services running: Check docker ps for ${COMPOSE_PROJECT_NAME} containers
+"""
+            }
+            
+            // Clean up Docker build cache (but not running containers)
+            sh "docker image prune -f --filter until=24h || true"
             
             // Archive docker-compose.yml for reference
-            archiveArtifacts artifacts: 'docker-compose.yml', fingerprint: true
+            script {
+                if (fileExists('docker-compose.yml')) {
+                    archiveArtifacts artifacts: 'docker-compose.yml', fingerprint: true
+                }
+            }
         }
         
         success {
             echo "✅ Pipeline completed successfully!"
-            // Optional: Send success notification
+            echo "🌐 Access your services at the URLs shown above"
         }
         
         failure {
             echo "❌ Pipeline failed!"
             script {
-                // Stop and clean up failed deployment
-                sh "docker-compose -p ${COMPOSE_PROJECT_NAME} down --remove-orphans || true"
+                echo "🔍 Debugging info:"
+                sh "docker ps -a | grep trademarshals || echo 'No trademarshals containers found'"
                 
-                // Show container logs for debugging
-                sh "docker-compose -p ${COMPOSE_PROJECT_NAME} logs || true"
+                // Only stop THIS build's containers, not all containers
+                sh "docker ps -q --filter name=trademarshals-${BUILD_NUMBER} | xargs -r docker stop || true"
+                
+                // Show logs from failed containers for debugging
+                sh """
+                    for container in \$(docker ps -a -q --filter name=trademarshals-${BUILD_NUMBER} 2>/dev/null || true); do
+                        echo "=== Logs for container \$container ==="
+                        docker logs --tail=50 \$container || true
+                    done
+                """
             }
-            // Optional: Send failure notification
         }
         
         cleanup {
-            echo "🗑️ Final cleanup..."
-            // Remove build-specific containers older than current build
+            echo "🗑️ Cleaning up old containers (keeping current and previous builds)..."
+            // Only remove containers older than 2 builds ago to preserve working deployments
             sh """
-                docker ps -a --filter name=trademarshals --format '{{.Names}}' | \\
-                grep -v '${BUILD_NUMBER}' | \\
-                head -10 | \\
-                xargs -r docker rm -f || true
+                OLD_BUILD=\$((${BUILD_NUMBER} - 2))
+                if [ \$OLD_BUILD -gt 0 ]; then
+                    docker ps -a --filter name=trademarshals-\$OLD_BUILD --format '{{.Names}}' | \\
+                    xargs -r docker rm -f || true
+                fi
             """
         }
     }
