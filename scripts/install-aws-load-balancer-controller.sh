@@ -52,33 +52,26 @@ usage() {
   exit 1
 }
 
-while getopts 'c:r:v:p:n:h-' flag; do
-  case "$flag" in
-    c) CLUSTER_NAME="$OPTARG" ;;
-    r) REGION="$OPTARG" ;;
-    v) VPC_ID="$OPTARG" ;;
-    p) POLICY_NAME="$OPTARG" ;;
-    n) NAMESPACE="$OPTARG" ;;
-    h) usage ;;
-    -) case "$OPTARG" in
-          no-subnet-check) SUBNET_CHECK=0 ;;
-          force-reinstall) FORCE_REINSTALL=1 ;;
-          extra-arg*)
-             # Support --extra-arg key=value (OPTARG will be 'extra-arg') so read next positional from "$@"
-             # Simpler: user passes --extra-arg=key=value (getopts with - doesn't parse =) so detect from $OPTARG maybe not workable.
-             # Provide alternative: if user passes literal '--extra-arg key=value' we shift one.
-             NEXT_INDEX=$((OPTIND))
-             VAL=${!NEXT_INDEX:-}
-             if [[ -n "$VAL" && "$VAL" == *=* ]]; then
-               EXTRA_ARGS+=("$VAL")
-               OPTIND=$((OPTIND+1))
-             else
-               echo "[ERROR] --extra-arg requires key=value right after it" >&2; exit 1
-             fi
-             ;;
-          *) usage ;;
-       esac ;;
-    *) usage ;;
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -c) CLUSTER_NAME="$2"; shift 2 ;;
+    -r) REGION="$2"; shift 2 ;;
+    -v) VPC_ID="$2"; shift 2 ;;
+    -p) POLICY_NAME="$2"; shift 2 ;;
+    -n) NAMESPACE="$2"; shift 2 ;;
+    --no-subnet-check) SUBNET_CHECK=0; shift ;;
+    --force-reinstall) FORCE_REINSTALL=1; shift ;;
+    --extra-arg)
+        if [[ -z "${2:-}" || "$2" != *=* ]]; then
+          echo "[ERROR] --extra-arg requires key=value argument" >&2; exit 1
+        fi
+        EXTRA_ARGS+=("$2"); shift 2 ;;
+    --extra-arg=*)
+        EXTRA_ARGS+=("${1#*=}"); shift ;;
+    -h|--help) usage ;;
+    --) shift; break ;;
+    -*) echo "[ERROR] Unknown option: $1" >&2; usage ;;
+    *) break ;;
   esac
 done
 
