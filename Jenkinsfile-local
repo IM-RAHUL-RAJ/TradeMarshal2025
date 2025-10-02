@@ -10,12 +10,7 @@ pipeline {
         IMAGE_TAG = "${BUILD_NUMBER}-${GIT_COMMIT.take(8)}"
         LATEST_TAG = 'latest'
         
-        // Docker                            docker run -d 
-                                --name angular-app 
-                                --network trademarshals-network-${BUILD_NUMBER} 
-                                -p 4200:80 
-                                --restart unless-stopped 
-                                trademarshals/frontend:${IMAGE_TAG}se Network
+        // Docker Compose Network
         COMPOSE_PROJECT_NAME = "trademarshals-${BUILD_NUMBER}"
         
         // Service Names & Directories
