@@ -13,8 +13,8 @@ RUN npm install
 # Step 5: Copy the rest of the application code into the container
 COPY . .
 
-ARG BACKEND_URL=http://localhost:8080/
-ENV BACKEND_URL=${BACKEND_URL}
+# ARG BACKEND_URL=http://localhost:8080/
+# ENV BACKEND_URL=${BACKEND_URL}
 # Step 6: Expose the port that the app will run on (usually 3000 for Node.js)
 EXPOSE 4000
 

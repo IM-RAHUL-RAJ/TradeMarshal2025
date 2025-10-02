@@ -25,7 +25,8 @@ public class FMTSDaoImpl implements FMTSDao {
 	private ObjectMapper objectMapper = new ObjectMapper();
  
 	// FMTS endpoint, configurable via environment variable
-	final private String url = System.getenv().getOrDefault("FMTS_URL", "http://a5a44ab9e82ca43c89b08d747204d116-117806422.ap-south-1.elb.amazonaws.com:3000/fmts");
+	// Default now points to internal service DNS; external ELB no longer required
+	final private String url = System.getenv().getOrDefault("FMTS_URL", "http://fmts-nodejs:3000/fmts");
  
 	/* FOR CLIENT VALIDATION */
 	// For Registration

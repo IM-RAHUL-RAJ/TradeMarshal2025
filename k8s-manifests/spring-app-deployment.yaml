@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: spring-app
-        image: rahulrvc.jfrog.io/rahul-repo/a900001/backend-a900001:2.5
+        image: cloudminds.jfrog.io/cloud2025/backend-a900001:2.8
         ports:
         - containerPort: 8080
         env:
@@ -25,10 +25,10 @@ spec:
         - name: SPRING_DATASOURCE_PASSWORD
           value: "SR2024fmr"
         - name: FMTS_URL
-          # value: "http://fmts-nodejs:3000/fmts"
-          value: "http://a5a44ab9e82ca43c89b08d747204d116-117806422.ap-south-1.elb.amazonaws.com:3000/fmts"
+          # Internal fmts ClusterIP service
+          value: "http://fmts-nodejs:3000/fmts"
       imagePullSecrets:
-        - name: jfrog-registry-secret
+        - name: cloudminds-secret
 ---
 apiVersion: v1
 kind: Service

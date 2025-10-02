@@ -14,25 +14,25 @@ spec:
     spec:
       containers:
       - name: angular-app
-        image: rahulrvc.jfrog.io/rahul-repo/a900001/frontend-a900001:2.5
+        image: cloudminds.jfrog.io/cloud2025/frontend-a900001:2.8
         ports:
         - containerPort: 80
         env:
         - name: API_BASE_URL
-          value: "http://a852b0ed786f94403960b1c6db40edb5-1155958163.ap-south-1.elb.amazonaws.com:4000/"
+          # Use relative path so Ingress host works regardless of domain
+          value: "/api/"
       imagePullSecrets:
-        - name: jfrog-registry-secret
+        - name: cloudminds-secret
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: angular-app
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: angular-app
   ports:
     - protocol: TCP
-      port: 4200
+      port: 80
       targetPort: 80
-      nodePort: 31200

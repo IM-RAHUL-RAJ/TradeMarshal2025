@@ -14,11 +14,11 @@ spec:
     spec:
       containers:
       - name: fmts-nodejs
-        image: rahulrvc.jfrog.io/rahul-repo/a900001/fmts-a900001:1.2
+        image: cloudminds.jfrog.io/cloud2025/fmts-a900001:1.3
         ports:
         - containerPort: 3000
       imagePullSecrets:
-        - name: jfrog-registry-secret
+        - name: cloudminds-secret
 ---
 apiVersion: v1
 kind: Service

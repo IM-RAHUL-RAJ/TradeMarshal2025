@@ -38,13 +38,22 @@ class App {
             allowedHeaders: 'Content-Type,Authorization'
         }));
 
-        // Defining Routes
-        this.app.use('/', healthRoutes); // Health route will be at the root level
-        this.app.use('/client', clientRoutes); // All client-related routes 
-        this.app.use('/client-preferences', clientPreferencesRoutes); // All client preferences-related routes 
-        this.app.use('/portfolio', portfolioRoutes); // All client portfolio-related routes 
-        this.app.use('/trade', tradeRoutes); // All trade-related routes 
-        this.app.use('/activity-report', activityReportRoutes); // All activity report-related routes 
+    // Defining Routes (legacy direct mounts)
+    this.app.use('/', healthRoutes); // Health route at root
+    this.app.use('/client', clientRoutes);
+    this.app.use('/client-preferences', clientPreferencesRoutes);
+    this.app.use('/portfolio', portfolioRoutes);
+    this.app.use('/trade', tradeRoutes);
+    this.app.use('/activity-report', activityReportRoutes);
+
+    // Ingress path-based prefix (/api) support
+    // Duplicate mounts so Ingress rule '/api' works without ALB rewrite capability.
+    this.app.use('/api', healthRoutes);
+    this.app.use('/api/client', clientRoutes);
+    this.app.use('/api/client-preferences', clientPreferencesRoutes);
+    this.app.use('/api/portfolio', portfolioRoutes);
+    this.app.use('/api/trade', tradeRoutes);
+    this.app.use('/api/activity-report', activityReportRoutes);
 
         // Handle unmatched routes
         this.app.use((req:Request, res:Response) => {

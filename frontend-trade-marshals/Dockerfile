@@ -1,4 +1,4 @@
-FROM node:14 AS build
+FROM node:20 AS build
 
 # Set the working directory
 WORKDIR /frontend-trade-marshals
@@ -6,12 +6,11 @@ WORKDIR /frontend-trade-marshals
 # Copy package.json and package-lock.json
 COPY package*.json ./
 
-# Install dependencies
+# Install dependencies (includes dev deps needed for build)
 RUN npm install
 
-# Install Angular CLI and specific versions of packages
-RUN npm install -g @angular/cli@12
-#RUN npm install @angular-devkit/build-angular@13.1.13 --force
+# Install Angular CLI matching project major version (15)
+RUN npm install -g @angular/cli@15.1.2
 
 # Copy the rest of the application code
 COPY . .
