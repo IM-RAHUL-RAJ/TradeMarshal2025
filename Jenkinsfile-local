@@ -19,9 +19,7 @@ pipeline {
         BACKEND_DIR = 'backend-trade-marshals'
         FMTS_DIR = 'fmts-backend'
         
-        // Build status tracking
-        SUCCESSFUL_BUILDS = ''
-        FAILED_BUILDS = ''
+
     }
     
     tools {
@@ -40,6 +38,10 @@ pipeline {
                         script: 'git rev-parse HEAD',
                         returnStdout: true
                     ).trim()
+                    
+                    // Initialize build tracking variables
+                    env.SUCCESSFUL_BUILDS = ''
+                    env.FAILED_BUILDS = ''
                     
                     echo "📋 Build Info:"
                     echo "  - Build Number: ${BUILD_NUMBER}"
@@ -63,9 +65,7 @@ pipeline {
                                     // Build Docker image locally only
                                     sh "docker build -t ${frontendImage} ."
                                     
-                                    script {
-                                        env.SUCCESSFUL_BUILDS = (env.SUCCESSFUL_BUILDS ?: '') + "frontend,"
-                                    }
+                                    env.SUCCESSFUL_BUILDS = (env.SUCCESSFUL_BUILDS ?: '') + "frontend,"
                                     echo "✅ Frontend image built locally: ${frontendImage}"
                                 }
                             } catch (Exception e) {
@@ -157,13 +157,17 @@ pipeline {
         stage('Build Summary') {
             steps {
                 script {
+                    echo "🔍 DEBUG: SUCCESSFUL_BUILDS = '${env.SUCCESSFUL_BUILDS}'"
+                    echo "🔍 DEBUG: FAILED_BUILDS = '${env.FAILED_BUILDS}'"
+                    echo "🔍 DEBUG: SUCCESSFUL_BUILDS length = ${env.SUCCESSFUL_BUILDS?.length()}"
+                    
                     echo """
 📊 BUILD SUMMARY:
 ✅ Successful: ${env.SUCCESSFUL_BUILDS ?: 'none'}
 ❌ Failed: ${env.FAILED_BUILDS ?: 'none'}
 """
                     
-                    if (!env.SUCCESSFUL_BUILDS) {
+                    if (!env.SUCCESSFUL_BUILDS || env.SUCCESSFUL_BUILDS.trim() == '') {
                         error("❌ All builds failed! Cannot proceed to deployment.")
                     }
                     
