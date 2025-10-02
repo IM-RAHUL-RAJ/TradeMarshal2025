@@ -61,7 +61,7 @@ pipeline {
                                     def frontendImage = "${DOCKER_NAMESPACE}/frontend:${IMAGE_TAG}"
                                     
                                     // Build Docker image locally only
-                                    sh "docker build --progress=plain -t ${frontendImage} ."
+                                    sh "docker build -t ${frontendImage} ."
                                     
                                     env.SUCCESSFUL_BUILDS += "frontend,"
                                     echo "✅ Frontend image built locally: ${frontendImage}"
@@ -85,7 +85,7 @@ pipeline {
                                     def midtierImage = "${DOCKER_NAMESPACE}/midtier:${IMAGE_TAG}"
                                     
                                     // Build Docker image locally only
-                                    sh "docker build --progress=plain -t ${midtierImage} ."
+                                    sh "docker build -t ${midtierImage} ."
                                     
                                     env.SUCCESSFUL_BUILDS += "midtier,"
                                     echo "✅ Midtier image built locally: ${midtierImage}"
@@ -112,7 +112,7 @@ pipeline {
                                     sh "mvn clean package -DskipTests"
                                     
                                     // Build Docker image locally only
-                                    sh "docker build --progress=plain -t ${backendImage} ."
+                                    sh "docker build -t ${backendImage} ."
                                     
                                     env.SUCCESSFUL_BUILDS += "backend,"
                                     echo "✅ Backend image built locally: ${backendImage}"
@@ -136,7 +136,7 @@ pipeline {
                                     def fmtsImage = "${DOCKER_NAMESPACE}/fmts:${IMAGE_TAG}"
                                     
                                     // Build Docker image locally only
-                                    sh "docker build --progress=plain -t ${fmtsImage} ."
+                                    sh "docker build -t ${fmtsImage} ."
                                     
                                     env.SUCCESSFUL_BUILDS += "fmts,"
                                     echo "✅ FMTS image built locally: ${fmtsImage}"
