@@ -2,14 +2,38 @@
 
 # install-aws-load-balancer-controller.sh
 # Purpose: Idempotent installer for AWS Load Balancer Controller (ALB Ingress Controller)
-# Usage: ./scripts/install-aws-load-balancer-controller.sh -c <cluster-name> -r <region> [-v <vpc-id>] [-p <policy-name>] [-n <namespace>]
-# Requires: aws, kubectl, helm, jq, (eksctl OR aws iam + kubectl)
+# Usage: ./scripts/install-aws-load-balancer-controller.sh -c <cluster-name> -r <region> [-v <vpc-id>] [-p <policy-name>] [-n <namespace>] [--no-subnet-check] [--force-reinstall] [--extra-arg key=value]
+# Requires: aws, kubectl, helm, jq (eksctl optional for automated OIDC + IRSA)
+# Features:
+#  * Infers cluster name, region, VPC ID if omitted (from current kube context / EKS API)
+#  * Ensures OIDC provider, IAM policy, and IRSA service account
+#  * Optional subnet tag validation (on by default) for kubernetes.io/cluster/<cluster>
+#  * Extended rollout timeout with rich diagnostics on failure (describe + recent logs)
+#  * Passes vpcId to helm chart if available (addresses some reconciliation delays)
 
 set -euo pipefail
 
+trap 'on_err $LINENO' ERR
+
+on_err() {
+  echo "[ERROR] Script failed at line $1" >&2
+  echo "[DIAG] Gathering controller diagnostics..." >&2
+  kubectl get deployment aws-load-balancer-controller -n "${NAMESPACE:-kube-system}" 2>/dev/null || true
+  kubectl get pods -n "${NAMESPACE:-kube-system}" -l app.kubernetes.io/name=aws-load-balancer-controller -o wide 2>/dev/null || true
+  POD=$(kubectl get pods -n "${NAMESPACE:-kube-system}" -l app.kubernetes.io/name=aws-load-balancer-controller -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+  if [[ -n "$POD" ]]; then
+    echo "[DIAG] Describe pod:" >&2
+    kubectl describe pod "$POD" -n "${NAMESPACE:-kube-system}" 2>/dev/null | sed 's/^/    /' || true
+    echo "[DIAG] Last 80 log lines:" >&2
+    kubectl logs "$POD" -n "${NAMESPACE:-kube-system}" 2>/dev/null | tail -n 80 | sed 's/^/    /' || true
+  fi
+  echo "[HINT] Check: SA IAM annotation, IAM permissions, subnet tags, security group rules, and chart/controller versions." >&2
+}
+
 DEFAULT_NAMESPACE="kube-system"
 POLICY_NAME_DEFAULT="AWSLoadBalancerControllerIAMPolicy"
-CHART_VERSION="1.7.2"   # Update as needed
+CHART_VERSION="1.7.2"          # Helm chart version (maps to controller v2.7.2)
+CONTROLLER_VERSION="v2.7.2"    # Keep IAM policy revision aligned
 REPO_NAME="eks"
 REPO_URL="https://aws.github.io/eks-charts"
 SERVICE_ACCOUNT="aws-load-balancer-controller"
@@ -19,13 +43,16 @@ REGION=""
 VPC_ID=""
 POLICY_NAME="$POLICY_NAME_DEFAULT"
 NAMESPACE="$DEFAULT_NAMESPACE"
+SUBNET_CHECK=1
+FORCE_REINSTALL=0
+EXTRA_ARGS=()
 
 usage() {
   grep '^#' "$0" | sed 's/^# //'
   exit 1
 }
 
-while getopts 'c:r:v:p:n:h' flag; do
+while getopts 'c:r:v:p:n:h-' flag; do
   case "$flag" in
     c) CLUSTER_NAME="$OPTARG" ;;
     r) REGION="$OPTARG" ;;
@@ -33,6 +60,24 @@ while getopts 'c:r:v:p:n:h' flag; do
     p) POLICY_NAME="$OPTARG" ;;
     n) NAMESPACE="$OPTARG" ;;
     h) usage ;;
+    -) case "$OPTARG" in
+          no-subnet-check) SUBNET_CHECK=0 ;;
+          force-reinstall) FORCE_REINSTALL=1 ;;
+          extra-arg*)
+             # Support --extra-arg key=value (OPTARG will be 'extra-arg') so read next positional from "$@"
+             # Simpler: user passes --extra-arg=key=value (getopts with - doesn't parse =) so detect from $OPTARG maybe not workable.
+             # Provide alternative: if user passes literal '--extra-arg key=value' we shift one.
+             NEXT_INDEX=$((OPTIND))
+             VAL=${!NEXT_INDEX:-}
+             if [[ -n "$VAL" && "$VAL" == *=* ]]; then
+               EXTRA_ARGS+=("$VAL")
+               OPTIND=$((OPTIND+1))
+             else
+               echo "[ERROR] --extra-arg requires key=value right after it" >&2; exit 1
+             fi
+             ;;
+          *) usage ;;
+       esac ;;
     *) usage ;;
   esac
 done
@@ -76,12 +121,15 @@ else
 fi
 
 echo "[INFO] Ensuring IAM policy $POLICY_NAME exists..."
-POLICY_ARN="arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):policy/$POLICY_NAME"
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+POLICY_ARN="arn:aws:iam::${ACCOUNT_ID}:policy/$POLICY_NAME"
 if ! aws iam get-policy --policy-arn "$POLICY_ARN" >/dev/null 2>&1; then
-  echo "[INFO] Creating IAM policy $POLICY_NAME"
+  echo "[INFO] Creating IAM policy $POLICY_NAME (controller $CONTROLLER_VERSION)"
   TMPF=$(mktemp)
-  curl -fsSL https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.7.2/docs/install/iam_policy.json -o "$TMPF"
+  curl -fsSL "https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/${CONTROLLER_VERSION}/docs/install/iam_policy.json" -o "$TMPF"
   aws iam create-policy --policy-name "$POLICY_NAME" --policy-document file://"$TMPF" >/dev/null
+else
+  echo "[INFO] IAM policy already exists." 
 fi
 
 echo "[INFO] Creating/ensuring service account with IAM role..."
@@ -93,9 +141,42 @@ if command -v eksctl >/dev/null; then
     --name "$SERVICE_ACCOUNT" \
     --attach-policy-arn "$POLICY_ARN" \
     --approve \
-    --override-existing-serviceaccounts || true
+    --override-existing-serviceaccounts >/dev/null || true
 else
-  echo "[WARN] eksctl not found; assuming service account already handled. If not, manually create IAM role and annotate SA." >&2
+  echo "[WARN] eksctl not found; ensure SA + role annotated manually." >&2
+fi
+
+echo "[INFO] Verifying service account IAM annotation..."
+SA_JSON=$(kubectl get sa "$SERVICE_ACCOUNT" -n "$NAMESPACE" -o json 2>/dev/null || true)
+if echo "$SA_JSON" | jq -e '.metadata.annotations["eks.amazonaws.com/role-arn"]' >/dev/null 2>&1; then
+  echo "[INFO] Service account has IAM role annotation." 
+else
+  echo "[WARN] Service account missing eks.amazonaws.com/role-arn annotation." >&2
+fi
+
+if [[ -z "$VPC_ID" ]]; then
+  VPC_ID=$(aws eks describe-cluster --name "$CLUSTER_NAME" --region "$REGION" --query 'cluster.resourcesVpcConfig.vpcId' --output text 2>/dev/null || true)
+  [[ -n "$VPC_ID" ]] && echo "[INFO] Inferred VPC ID: $VPC_ID"
+fi
+
+if [[ "$SUBNET_CHECK" -eq 1 ]]; then
+  echo "[INFO] Validating subnet tags (kubernetes.io/cluster/$CLUSTER_NAME)..."
+  SUBNET_IDS=$(aws eks describe-cluster --name "$CLUSTER_NAME" --region "$REGION" --query 'cluster.resourcesVpcConfig.subnetIds' --output text 2>/dev/null || true)
+  if [[ -n "$SUBNET_IDS" ]]; then
+    MISSING=0
+    for S in $SUBNET_IDS; do
+      TAG_KEYS=$(aws ec2 describe-subnets --subnet-ids "$S" --region "$REGION" --query 'Subnets[0].Tags[].Key' --output text 2>/dev/null || true)
+      if ! echo "$TAG_KEYS" | grep -q "kubernetes.io/cluster/${CLUSTER_NAME}"; then
+        echo "[WARN] Subnet $S missing kubernetes.io/cluster/${CLUSTER_NAME} tag." >&2
+        MISSING=1
+      fi
+    done
+    [[ $MISSING -eq 1 ]] && echo "[WARN] Untagged subnets may prevent ALB creation." >&2
+  else
+    echo "[WARN] Could not list subnets for cluster to validate tags." >&2
+  fi
+else
+  echo "[INFO] Skipping subnet tag validation (user disabled)."
 fi
 
 echo "[INFO] Adding Helm repo $REPO_NAME if needed..."
@@ -104,17 +185,52 @@ if ! helm repo list | grep -q "\b$REPO_NAME\b"; then
 fi
 helm repo update >/dev/null
 
+if [[ $FORCE_REINSTALL -eq 1 ]]; then
+  echo "[INFO] --force-reinstall specified: uninstalling any existing release first"
+  helm uninstall aws-load-balancer-controller -n "$NAMESPACE" >/dev/null 2>&1 || true
+  # Wait for old pods to terminate
+  kubectl delete deployment aws-load-balancer-controller -n "$NAMESPACE" --ignore-not-found
+  sleep 5
+fi
+
 echo "[INFO] Installing / upgrading AWS Load Balancer Controller chart..."
-helm upgrade -i aws-load-balancer-controller $REPO_NAME/aws-load-balancer-controller \
-  -n "$NAMESPACE" \
-  --set clusterName="$CLUSTER_NAME" \
-  --set region="$REGION" \
-  --set serviceAccount.create=false \
-  --set serviceAccount.name="$SERVICE_ACCOUNT" \
-  --version "$CHART_VERSION"
+HELM_ARGS=(upgrade -i aws-load-balancer-controller $REPO_NAME/aws-load-balancer-controller
+  -n "$NAMESPACE"
+  --set clusterName="$CLUSTER_NAME"
+  --set region="$REGION"
+  --set serviceAccount.create=false
+  --set serviceAccount.name="$SERVICE_ACCOUNT"
+  --version "$CHART_VERSION")
 
-echo "[INFO] Waiting for deployment rollout..."
-kubectl rollout status deployment/aws-load-balancer-controller -n "$NAMESPACE" --timeout=180s
+if [[ -n "$VPC_ID" ]]; then
+  echo "[INFO] Passing vpcId=$VPC_ID to chart"
+  HELM_ARGS+=(--set vpcId="$VPC_ID")
+fi
 
-echo "[INFO] Installed. Validate with: kubectl get ingressclasses; kubectl get ingress"
-echo "[INFO] To uninstall: helm uninstall aws-load-balancer-controller -n $NAMESPACE (service account/IAM role remain)."
+if [[ ${#EXTRA_ARGS[@]} -gt 0 ]]; then
+  for pair in "${EXTRA_ARGS[@]}"; do
+    # Convert key=value to --set extraArgs.key=value (dots in key unsupported here)
+    KEY=${pair%%=*}
+    VAL=${pair#*=}
+    echo "[INFO] Adding extra controller arg: $KEY=$VAL"
+    HELM_ARGS+=(--set "extraArgs.$KEY=$VAL")
+  done
+fi
+
+helm "${HELM_ARGS[@]}"
+
+echo "[INFO] Waiting for deployment rollout (timeout 5m)..."
+kubectl rollout status deployment/aws-load-balancer-controller -n "$NAMESPACE" --timeout=300s
+
+echo "[INFO] Deployment ready. Controller args:"
+kubectl get deployment aws-load-balancer-controller -n "$NAMESPACE" -o jsonpath='{.spec.template.spec.containers[0].args}'
+echo
+
+POD=$(kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/name=aws-load-balancer-controller -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+if [[ -n "$POD" ]]; then
+  echo "[INFO] Recent controller log lines (tail 25):"
+  kubectl logs "$POD" -n "$NAMESPACE" --tail=25 2>/dev/null || true
+fi
+
+echo "[INFO] Installed successfully. Validate with: kubectl get ingressclasses; kubectl get ingress"
+echo "[INFO] To uninstall: helm uninstall aws-load-balancer-controller -n $NAMESPACE (SA/IAM policy remain)"
