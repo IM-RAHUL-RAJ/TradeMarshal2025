@@ -214,6 +214,15 @@ if [[ -n "$EXPLICIT_SUBNET_IDS" ]]; then
   # Normalize commas (remove spaces)
   ANNOTATION_SUBNET_LIST=$(echo "$EXPLICIT_SUBNET_IDS" | tr -d ' ')
   echo "[INFO] Will annotate ingress with explicit subnets: $ANNOTATION_SUBNET_LIST"
+  # Also ensure required tags are present for each explicit subnet
+  IFS=',' read -r -a __EX_SPLIT <<< "$ANNOTATION_SUBNET_LIST"
+  for S in "${__EX_SPLIT[@]}"; do
+    [[ -z "$S" ]] && continue
+    echo "[INFO] Tagging explicit subnet $S (cluster + kubernetes.io/role/elb=1)"
+    aws ec2 create-tags --region "$REGION" --resources "$S" --tags \
+      Key=kubernetes.io/cluster/$CLUSTER_NAME,Value=shared \
+      Key=kubernetes.io/role/elb,Value=1 >/dev/null 2>&1 || echo "[WARN] Failed tagging subnet $S" >&2
+  done
 fi
 
 echo "[INFO] Adding Helm repo $REPO_NAME if needed..."
