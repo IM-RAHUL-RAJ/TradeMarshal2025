@@ -1,5 +1,5 @@
 export const environment = {
   production: true,
-  // Base API path pointing to midtier service
-  apiBaseUrl: 'http://localhost:4000/api/'
+  // Browser-accessible API path for Docker deployment
+  apiBaseUrl: 'http://localhost:4000/'
 };

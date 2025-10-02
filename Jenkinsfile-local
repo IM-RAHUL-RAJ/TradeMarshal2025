@@ -10,7 +10,12 @@ pipeline {
         IMAGE_TAG = "${BUILD_NUMBER}-${GIT_COMMIT.take(8)}"
         LATEST_TAG = 'latest'
         
-        // Docker Compose Network
+        // Docker                            docker run -d 
+                                --name angular-app 
+                                --network trademarshals-network-${BUILD_NUMBER} 
+                                -p 4200:80 
+                                --restart unless-stopped 
+                                trademarshals/frontend:${IMAGE_TAG}se Network
         COMPOSE_PROJECT_NAME = "trademarshals-${BUILD_NUMBER}"
         
         // Service Names & Directories
@@ -280,38 +285,22 @@ services:"""
                     // Stop any existing containers from previous deployments
                     echo "🧹 Cleaning up existing containers..."
                     sh """
-                        docker ps -q --filter name=trademarshals-frontend- | xargs -r docker stop || true
-                        docker ps -q --filter name=trademarshals-midtier- | xargs -r docker stop || true
-                        docker ps -q --filter name=trademarshals-backend- | xargs -r docker stop || true
-                        docker ps -q --filter name=trademarshals-fmts- | xargs -r docker stop || true
-                        docker ps -aq --filter name=trademarshals-frontend- | xargs -r docker rm || true
-                        docker ps -aq --filter name=trademarshals-midtier- | xargs -r docker rm || true
-                        docker ps -aq --filter name=trademarshals-backend- | xargs -r docker rm || true
-                        docker ps -aq --filter name=trademarshals-fmts- | xargs -r docker rm || true
+                        docker stop frontend midtier spring-app fmts-nodejs || true
+                        docker rm frontend midtier spring-app fmts-nodejs || true
+                        docker ps -q --filter name=trademarshals- | xargs -r docker stop || true
+                        docker ps -aq --filter name=trademarshals- | xargs -r docker rm || true
                     """
                     
                     // Create network
                     echo "🌐 Creating Docker network..."
                     sh "docker network create trademarshals-network-${BUILD_NUMBER} || true"
                     
-                    // Start services based on successful builds
-                    if (env.SUCCESSFUL_BUILDS.contains('backend')) {
-                        echo "🚀 Starting Backend service..."
-                        sh """
-                            docker run -d \\
-                                --name trademarshals-backend-${BUILD_NUMBER} \\
-                                --network trademarshals-network-${BUILD_NUMBER} \\
-                                -p 8080:8080 \\
-                                --restart unless-stopped \\
-                                trademarshals/backend:${IMAGE_TAG}
-                        """
-                    }
-                    
+                    // Start services based on successful builds with correct service names that match code expectations
                     if (env.SUCCESSFUL_BUILDS.contains('fmts')) {
                         echo "🚀 Starting FMTS service..."
                         sh """
                             docker run -d \\
-                                --name trademarshals-fmts-${BUILD_NUMBER} \\
+                                --name fmts-nodejs \\
                                 --network trademarshals-network-${BUILD_NUMBER} \\
                                 -p 3000:3000 \\
                                 --restart unless-stopped \\
@@ -319,15 +308,26 @@ services:"""
                         """
                     }
                     
+                    if (env.SUCCESSFUL_BUILDS.contains('backend')) {
+                        echo "🚀 Starting Backend service..."
+                        sh """
+                            docker run -d \\
+                                --name spring-app \\
+                                --network trademarshals-network-${BUILD_NUMBER} \\
+                                -p 8080:8080 \\
+                                -e FMTS_URL=http://fmts-nodejs:3000/fmts \\
+                                --restart unless-stopped \\
+                                trademarshals/backend:${IMAGE_TAG}
+                        """
+                    }
+                    
                     if (env.SUCCESSFUL_BUILDS.contains('midtier')) {
                         echo "🚀 Starting Midtier service..."
                         sh """
                             docker run -d \\
-                                --name trademarshals-midtier-${BUILD_NUMBER} \\
+                                --name midtier \\
                                 --network trademarshals-network-${BUILD_NUMBER} \\
                                 -p 4000:4000 \\
-                                -e BACKEND_URL=http://trademarshals-backend-${BUILD_NUMBER}:8080 \\
-                                -e FMTS_URL=http://trademarshals-fmts-${BUILD_NUMBER}:3000 \\
                                 --restart unless-stopped \\
                                 trademarshals/midtier:${IMAGE_TAG}
                         """
@@ -337,7 +337,7 @@ services:"""
                         echo "🚀 Starting Frontend service..."
                         sh """
                             docker run -d \\
-                                --name trademarshals-frontend-${BUILD_NUMBER} \\
+                                --name frontend \\
                                 --network trademarshals-network-${BUILD_NUMBER} \\
                                 -p 4200:80 \\
                                 --restart unless-stopped \\
@@ -351,7 +351,7 @@ services:"""
                     
                     // Show running containers
                     echo "📋 Running containers:"
-                    sh "docker ps --filter name=trademarshals- --format 'table {{.Names}}\\t{{.Status}}\\t{{.Ports}}'"
+                    sh "docker ps --filter name=frontend --filter name=midtier --filter name=spring-app --filter name=fmts-nodejs --format 'table {{.Names}}\\t{{.Status}}\\t{{.Ports}}'"
                 }
             }
         }
@@ -424,12 +424,12 @@ services:"""
 
                     echo """
 🔧 Management Commands:
-  - View all logs:    docker logs -f trademarshals-frontend-${BUILD_NUMBER}
-  - View backend:     docker logs -f trademarshals-backend-${BUILD_NUMBER}
-  - View midtier:     docker logs -f trademarshals-midtier-${BUILD_NUMBER}
-  - View FMTS:        docker logs -f trademarshals-fmts-${BUILD_NUMBER}
-  - Stop all:         docker stop \$(docker ps -q --filter name=trademarshals-)
-  - Remove all:       docker rm \$(docker ps -aq --filter name=trademarshals-)
+  - View frontend:    docker logs -f frontend
+  - View backend:     docker logs -f spring-app
+  - View midtier:     docker logs -f midtier
+  - View FMTS:        docker logs -f fmts-nodejs
+  - Stop all:         docker stop frontend midtier spring-app fmts-nodejs
+  - Remove all:       docker rm frontend midtier spring-app fmts-nodejs
 
 ✅ All services are running locally!
 """
