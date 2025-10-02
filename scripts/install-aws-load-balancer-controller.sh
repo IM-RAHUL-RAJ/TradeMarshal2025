@@ -113,8 +113,23 @@ fi
 
 command -v aws >/dev/null || { echo "[ERROR] aws CLI not found" >&2; exit 1; }
 command -v kubectl >/dev/null || { echo "[ERROR] kubectl not found" >&2; exit 1; }
-command -v helm >/dev/null || { echo "[ERROR] helm not found" >&2; exit 1; }
 command -v jq >/dev/null || { echo "[ERROR] jq not found" >&2; exit 1; }
+
+# Install Helm if not present
+if ! command -v helm >/dev/null; then
+  echo "[INFO] Helm not found, installing Helm v3.15.0..."
+  HELM_VERSION="v3.15.0"
+  TMPDIR=$(mktemp -d)
+  cd "$TMPDIR"
+  wget -q "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz"
+  tar -zxf "helm-${HELM_VERSION}-linux-amd64.tar.gz"
+  sudo mv linux-amd64/helm /usr/local/bin/helm
+  cd - >/dev/null
+  rm -rf "$TMPDIR"
+  echo "[INFO] Helm installed: $(helm version --short)"
+else
+  echo "[INFO] Using existing Helm: $(helm version --short)"
+fi
 
 echo "[INFO] Validating cluster access..."
 kubectl get nodes >/dev/null
