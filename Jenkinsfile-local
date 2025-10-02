@@ -63,11 +63,13 @@ pipeline {
                                     // Build Docker image locally only
                                     sh "docker build -t ${frontendImage} ."
                                     
-                                    env.SUCCESSFUL_BUILDS += "frontend,"
+                                    script {
+                                        env.SUCCESSFUL_BUILDS = (env.SUCCESSFUL_BUILDS ?: '') + "frontend,"
+                                    }
                                     echo "✅ Frontend image built locally: ${frontendImage}"
                                 }
                             } catch (Exception e) {
-                                env.FAILED_BUILDS += "frontend,"
+                                env.FAILED_BUILDS = (env.FAILED_BUILDS ?: '') + "frontend,"
                                 echo "❌ Frontend build failed: ${e.getMessage()}"
                                 currentBuild.result = 'UNSTABLE'
                             }
@@ -87,11 +89,11 @@ pipeline {
                                     // Build Docker image locally only
                                     sh "docker build -t ${midtierImage} ."
                                     
-                                    env.SUCCESSFUL_BUILDS += "midtier,"
+                                    env.SUCCESSFUL_BUILDS = (env.SUCCESSFUL_BUILDS ?: '') + "midtier,"
                                     echo "✅ Midtier image built locally: ${midtierImage}"
                                 }
                             } catch (Exception e) {
-                                env.FAILED_BUILDS += "midtier,"
+                                env.FAILED_BUILDS = (env.FAILED_BUILDS ?: '') + "midtier,"
                                 echo "❌ Midtier build failed: ${e.getMessage()}"
                                 currentBuild.result = 'UNSTABLE'
                             }
@@ -114,11 +116,11 @@ pipeline {
                                     // Build Docker image locally only
                                     sh "docker build -t ${backendImage} ."
                                     
-                                    env.SUCCESSFUL_BUILDS += "backend,"
+                                    env.SUCCESSFUL_BUILDS = (env.SUCCESSFUL_BUILDS ?: '') + "backend,"
                                     echo "✅ Backend image built locally: ${backendImage}"
                                 }
                             } catch (Exception e) {
-                                env.FAILED_BUILDS += "backend,"
+                                env.FAILED_BUILDS = (env.FAILED_BUILDS ?: '') + "backend,"
                                 echo "❌ Backend build failed: ${e.getMessage()}"
                                 currentBuild.result = 'UNSTABLE'
                             }
@@ -138,11 +140,11 @@ pipeline {
                                     // Build Docker image locally only
                                     sh "docker build -t ${fmtsImage} ."
                                     
-                                    env.SUCCESSFUL_BUILDS += "fmts,"
+                                    env.SUCCESSFUL_BUILDS = (env.SUCCESSFUL_BUILDS ?: '') + "fmts,"
                                     echo "✅ FMTS image built locally: ${fmtsImage}"
                                 }
                             } catch (Exception e) {
-                                env.FAILED_BUILDS += "fmts,"
+                                env.FAILED_BUILDS = (env.FAILED_BUILDS ?: '') + "fmts,"
                                 echo "❌ FMTS build failed: ${e.getMessage()}"
                                 currentBuild.result = 'UNSTABLE'
                             }
