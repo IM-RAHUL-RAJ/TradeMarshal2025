@@ -188,7 +188,57 @@ docker run -d --name jenkins-trademarshals -p 9090:8080 -p 50000:50000 \
 - [ ] Branch: `*/your-branch`
 - [ ] Script Path: `Jenkinsfile-local`
 
-## 📝 Step-by-Step Changes
+## � Jenkins Data Persistence (Important!)
+
+### ✅ **Your Jenkins Setup is Persistent!**
+When you created Jenkins with:
+```bash
+-v /home/associate/jenkins-data:/var/jenkins_home
+```
+
+**Everything stays forever** - even if you stop/restart containers! 🎉
+
+### 📁 **What's Stored on Your Machine:**
+```bash
+# Check your Jenkins data
+ls -la /home/associate/jenkins-data/
+
+# Your pipelines are stored here:
+/home/associate/jenkins-data/jobs/Your-Pipeline-Name/
+├── config.xml          # Pipeline configuration
+├── builds/             # All build history & logs  
+└── nextBuildNumber     # Build counter
+```
+
+### 🔄 **Container Management:**
+```bash
+# Stop Jenkins (data safe)
+docker stop jenkins-trademarshals
+
+# Start Jenkins (everything restored)  
+docker start jenkins-trademarshals
+
+# Even if you remove container completely:
+docker rm jenkins-trademarshals
+# Then recreate with same command = everything back!
+```
+
+### 🔍 **Verify Persistence:**
+- [ ] Stop Jenkins container: `docker stop jenkins-trademarshals`
+- [ ] Check data still exists: `ls /home/associate/jenkins-data/jobs/`
+- [ ] Start Jenkins: `docker start jenkins-trademarshals`  
+- [ ] Access http://localhost:9090 - all pipelines there! ✅
+
+### 💡 **Backup Your Jenkins:**
+```bash
+# Create backup
+tar -czf jenkins-backup-$(date +%Y%m%d).tar.gz /home/associate/jenkins-data/
+
+# Restore if needed
+tar -xzf jenkins-backup-YYYYMMDD.tar.gz -C /
+```
+
+## �📝 Step-by-Step Changes
 
 ### 1. Jenkinsfile-local Updates
 ```diff

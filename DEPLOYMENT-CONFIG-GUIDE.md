@@ -53,6 +53,83 @@ sudo systemctl enable jenkins
   sudo cat /var/lib/jenkins/secrets/initialAdminPassword
   ```
 
+### 🔄 **Jenkins Data Persistence**
+
+#### ✅ **How Jenkins Stores Your Data**
+
+Your Jenkins setup uses **bind mounting** to ensure all data persists even when containers are stopped/restarted:
+
+```bash
+# When you create Jenkins container:
+-v /home/associate/jenkins-data:/var/jenkins_home
+```
+
+**What gets stored permanently on your host machine:**
+
+1. **Pipeline Configurations**: `/home/associate/jenkins-data/jobs/`
+   - All your pipeline jobs and configurations
+   - Build histories and logs
+   - Job settings and Git repository connections
+
+2. **Jenkins Settings**: 
+   - User accounts and permissions (`users/`)
+   - System configuration (`config.xml`)
+   - Credentials and secrets (`credentials.xml`, `secrets/`)
+   - Installed plugins (`plugins/`)
+
+3. **Tool Configurations**:
+   - Maven, NodeJS, Docker tool setups
+   - All configured tools and their versions
+
+4. **Build Data**:
+   - Workspace checkouts (`workspace/`)
+   - Build artifacts and fingerprints
+   - Complete build logs
+
+#### 🔄 **Container Lifecycle Management**
+
+```bash
+# Stop Jenkins (data remains safe)
+docker stop jenkins-trademarshals
+
+# Start Jenkins again (everything restored)
+docker start jenkins-trademarshals
+
+# Or recreate container entirely (data still preserved)
+docker rm jenkins-trademarshals
+docker run -d --name jenkins-trademarshals -p 9090:8080 -p 50000:50000 \
+  -v /home/associate/jenkins-data:/var/jenkins_home \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /bin/docker:/usr/bin/docker \
+  --group-add $(stat -c %g /var/run/docker.sock) \
+  jenkins/jenkins:lts
+```
+
+**Result**: All pipelines, settings, build history, and configurations remain intact! 🎉
+
+#### 💾 **Data Safety Tips**
+
+1. **Backup Strategy**:
+   ```bash
+   # Create backup
+   tar -czf jenkins-backup-$(date +%Y%m%d).tar.gz /home/associate/jenkins-data/
+   
+   # Restore from backup
+   tar -xzf jenkins-backup-YYYYMMDD.tar.gz -C /
+   ```
+
+2. **Check Data Location**:
+   ```bash
+   # Verify your Jenkins data
+   ls -la /home/associate/jenkins-data/
+   ls -la /home/associate/jenkins-data/jobs/    # Your pipelines
+   ```
+
+3. **Permissions**: Ensure proper ownership
+   ```bash
+   sudo chown -R 1000:1000 /home/associate/jenkins-data/
+   ```
+
 ### 3. **Install Required Plugins**
 
 #### Essential Plugins (Install during setup wizard):
