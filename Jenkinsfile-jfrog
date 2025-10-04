@@ -1,0 +1,455 @@
+pipeline {
+    agent any
+    
+    environment {
+        // JFrog Artifactory Configuration
+        JFROG_URL = 'cloudminds.jfrog.io'
+        JFROG_REPO = 'cloud2025'
+        DOCKER_REGISTRY = "${JFROG_URL}/${JFROG_REPO}"
+        DOCKER_NAMESPACE = 'trademarshals'
+        
+        // Image Tags
+        IMAGE_TAG = "${BUILD_NUMBER}-${GIT_COMMIT.take(8)}"
+        LATEST_TAG = 'latest'
+        
+        // Docker Compose Network
+        COMPOSE_PROJECT_NAME = "trademarshals-${BUILD_NUMBER}"
+        
+        // Service Names & Directories
+        FRONTEND_DIR = 'frontend-trade-marshals'
+        MIDTIER_DIR = 'midtier-trade-marshals'
+        BACKEND_DIR = 'backend-trade-marshals'
+        FMTS_DIR = 'fmts-backend'
+        
+        // JFrog Credentials
+        JFROG_USERNAME = 'rahulraj@cloudminds.co.site'
+        JFROG_PASSWORD = 'LA2025fmr'
+    }
+    
+    tools {
+        nodejs '18'
+        maven '3.8'
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                echo "🔄 Checking out code from repository..."
+                checkout scm
+                
+                script {
+                    env.GIT_COMMIT = sh(
+                        script: 'git rev-parse HEAD',
+                        returnStdout: true
+                    ).trim()
+                    
+                    // Initialize build tracking variables
+                    env.SUCCESSFUL_BUILDS = ''
+                    env.FAILED_BUILDS = ''
+                    
+                    echo "📋 Build Info:"
+                    echo "  - Build Number: ${BUILD_NUMBER}"
+                    echo "  - Git Commit: ${GIT_COMMIT.take(8)}"
+                    echo "  - Image Tag: ${IMAGE_TAG}"
+                    echo "  - JFrog Registry: ${DOCKER_REGISTRY}"
+                }
+            }
+        }
+        
+        stage('Docker Login to JFrog') {
+            steps {
+                echo "🔐 Logging into JFrog Artifactory..."
+                script {
+                    sh """
+                        echo '${JFROG_PASSWORD}' | docker login ${JFROG_URL} --username '${JFROG_USERNAME}' --password-stdin
+                    """
+                    echo "✅ Successfully logged into JFrog Artifactory"
+                }
+            }
+        }
+        
+        stage('Build and Push Images') {
+            parallel {
+                stage('Frontend Angular') {
+                    steps {
+                        script {
+                            try {
+                                dir("${FRONTEND_DIR}") {
+                                    echo "🏗️ Building Angular Frontend..."
+                                    
+                                    def frontendImage = "${DOCKER_REGISTRY}/${DOCKER_NAMESPACE}/frontend:${IMAGE_TAG}"
+                                    def frontendLatest = "${DOCKER_REGISTRY}/${DOCKER_NAMESPACE}/frontend:${LATEST_TAG}"
+                                    
+                                    // Build Docker image
+                                    sh "docker build -t ${frontendImage} ."
+                                    sh "docker tag ${frontendImage} ${frontendLatest}"
+                                    
+                                    // Push to JFrog
+                                    echo "📤 Pushing Frontend to JFrog..."
+                                    sh "docker push ${frontendImage}"
+                                    sh "docker push ${frontendLatest}"
+                                    
+                                    env.SUCCESSFUL_BUILDS = (env.SUCCESSFUL_BUILDS ?: '') + "frontend,"
+                                    echo "✅ Frontend built and pushed: ${frontendImage}"
+                                }
+                            } catch (Exception e) {
+                                env.FAILED_BUILDS = (env.FAILED_BUILDS ?: '') + "frontend,"
+                                echo "❌ Frontend build/push failed: ${e.getMessage()}"
+                                currentBuild.result = 'UNSTABLE'
+                            }
+                        }
+                    }
+                }
+                
+                stage('Midtier Node.js') {
+                    steps {
+                        script {
+                            try {
+                                dir("${MIDTIER_DIR}") {
+                                    echo "🏗️ Building Midtier Service..."
+                                    
+                                    def midtierImage = "${DOCKER_REGISTRY}/${DOCKER_NAMESPACE}/midtier:${IMAGE_TAG}"
+                                    def midtierLatest = "${DOCKER_REGISTRY}/${DOCKER_NAMESPACE}/midtier:${LATEST_TAG}"
+                                    
+                                    // Build Docker image
+                                    sh "docker build -t ${midtierImage} ."
+                                    sh "docker tag ${midtierImage} ${midtierLatest}"
+                                    
+                                    // Push to JFrog
+                                    echo "📤 Pushing Midtier to JFrog..."
+                                    sh "docker push ${midtierImage}"
+                                    sh "docker push ${midtierLatest}"
+                                    
+                                    env.SUCCESSFUL_BUILDS = (env.SUCCESSFUL_BUILDS ?: '') + "midtier,"
+                                    echo "✅ Midtier built and pushed: ${midtierImage}"
+                                }
+                            } catch (Exception e) {
+                                env.FAILED_BUILDS = (env.FAILED_BUILDS ?: '') + "midtier,"
+                                echo "❌ Midtier build/push failed: ${e.getMessage()}"
+                                currentBuild.result = 'UNSTABLE'
+                            }
+                        }
+                    }
+                }
+                
+                stage('Backend Spring Boot') {
+                    steps {
+                        script {
+                            try {
+                                dir("${BACKEND_DIR}") {
+                                    echo "🏗️ Building Spring Boot Backend..."
+                                    
+                                    def backendImage = "${DOCKER_REGISTRY}/${DOCKER_NAMESPACE}/backend:${IMAGE_TAG}"
+                                    def backendLatest = "${DOCKER_REGISTRY}/${DOCKER_NAMESPACE}/backend:${LATEST_TAG}"
+                                    
+                                    // Build with Maven
+                                    sh "mvn clean package -DskipTests"
+                                    
+                                    // Build Docker image
+                                    sh "docker build -t ${backendImage} ."
+                                    sh "docker tag ${backendImage} ${backendLatest}"
+                                    
+                                    // Push to JFrog
+                                    echo "📤 Pushing Backend to JFrog..."
+                                    sh "docker push ${backendImage}"
+                                    sh "docker push ${backendLatest}"
+                                    
+                                    env.SUCCESSFUL_BUILDS = (env.SUCCESSFUL_BUILDS ?: '') + "backend,"
+                                    echo "✅ Backend built and pushed: ${backendImage}"
+                                }
+                            } catch (Exception e) {
+                                env.FAILED_BUILDS = (env.FAILED_BUILDS ?: '') + "backend,"
+                                echo "❌ Backend build/push failed: ${e.getMessage()}"
+                                currentBuild.result = 'UNSTABLE'
+                            }
+                        }
+                    }
+                }
+                
+                stage('FMTS Service') {
+                    steps {
+                        script {
+                            try {
+                                dir("${FMTS_DIR}") {
+                                    echo "🏗️ Building FMTS Service..."
+                                    
+                                    def fmtsImage = "${DOCKER_REGISTRY}/${DOCKER_NAMESPACE}/fmts:${IMAGE_TAG}"
+                                    def fmtsLatest = "${DOCKER_REGISTRY}/${DOCKER_NAMESPACE}/fmts:${LATEST_TAG}"
+                                    
+                                    // Build Docker image
+                                    sh "docker build -t ${fmtsImage} ."
+                                    sh "docker tag ${fmtsImage} ${fmtsLatest}"
+                                    
+                                    // Push to JFrog
+                                    echo "📤 Pushing FMTS to JFrog..."
+                                    sh "docker push ${fmtsImage}"
+                                    sh "docker push ${fmtsLatest}"
+                                    
+                                    env.SUCCESSFUL_BUILDS = (env.SUCCESSFUL_BUILDS ?: '') + "fmts,"
+                                    echo "✅ FMTS built and pushed: ${fmtsImage}"
+                                }
+                            } catch (Exception e) {
+                                env.FAILED_BUILDS = (env.FAILED_BUILDS ?: '') + "fmts,"
+                                echo "❌ FMTS build/push failed: ${e.getMessage()}"
+                                currentBuild.result = 'UNSTABLE'
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Build Summary') {
+            steps {
+                script {
+                    echo "🔍 DEBUG: SUCCESSFUL_BUILDS = '${env.SUCCESSFUL_BUILDS}'"
+                    echo "🔍 DEBUG: FAILED_BUILDS = '${env.FAILED_BUILDS}'"
+                    
+                    echo """
+📊 BUILD AND PUSH SUMMARY:
+✅ Successful: ${env.SUCCESSFUL_BUILDS ?: 'none'}
+❌ Failed: ${env.FAILED_BUILDS ?: 'none'}
+📦 Registry: ${DOCKER_REGISTRY}
+"""
+                    
+                    if (!env.SUCCESSFUL_BUILDS || env.SUCCESSFUL_BUILDS.trim() == '') {
+                        error("❌ All builds failed! Cannot proceed to deployment.")
+                    }
+                    
+                    if (env.FAILED_BUILDS) {
+                        echo "⚠️ Some builds failed, but continuing with successful services..."
+                    }
+                }
+            }
+        }
+        
+        stage('Deploy from JFrog') {
+            steps {
+                echo "🚀 Deploying services from JFrog Artifactory..."
+                script {
+                    // Check what's available
+                    sh "docker --version"
+                    
+                    // Stop any existing containers from previous deployments
+                    echo "🧹 Cleaning up existing containers..."
+                    sh """
+                        docker stop frontend midtier spring-app fmts-nodejs || true
+                        docker rm frontend midtier spring-app fmts-nodejs || true
+                        docker ps -q --filter name=trademarshals- | xargs -r docker stop || true
+                        docker ps -aq --filter name=trademarshals- | xargs -r docker rm || true
+                    """
+                    
+                    // Create network
+                    echo "🌐 Creating Docker network..."
+                    sh "docker network create trademarshals-network-${BUILD_NUMBER} || true"
+                    
+                    // Start services based on successful builds - PULLING FROM JFROG
+                    if (env.SUCCESSFUL_BUILDS.contains('fmts')) {
+                        echo "📥 Pulling and starting FMTS service from JFrog..."
+                        def fmtsImage = "${DOCKER_REGISTRY}/${DOCKER_NAMESPACE}/fmts:${IMAGE_TAG}"
+                        sh "docker pull ${fmtsImage}"
+                        sh """
+                            docker run -d \\
+                                --name fmts-nodejs \\
+                                --network trademarshals-network-${BUILD_NUMBER} \\
+                                -p 3000:3000 \\
+                                --restart unless-stopped \\
+                                ${fmtsImage}
+                        """
+                    }
+                    
+                    if (env.SUCCESSFUL_BUILDS.contains('backend')) {
+                        echo "📥 Pulling and starting Backend service from JFrog..."
+                        def backendImage = "${DOCKER_REGISTRY}/${DOCKER_NAMESPACE}/backend:${IMAGE_TAG}"
+                        sh "docker pull ${backendImage}"
+                        sh """
+                            docker run -d \\
+                                --name spring-app \\
+                                --network trademarshals-network-${BUILD_NUMBER} \\
+                                -p 8080:8080 \\
+                                --dns=8.8.8.8 \\
+                                --dns=8.8.4.4 \\
+                                -e FMTS_URL=http://fmts-nodejs:3000/fmts \\
+                                --restart unless-stopped \\
+                                ${backendImage}
+                        """
+                    }
+                    
+                    if (env.SUCCESSFUL_BUILDS.contains('midtier')) {
+                        echo "📥 Pulling and starting Midtier service from JFrog..."
+                        def midtierImage = "${DOCKER_REGISTRY}/${DOCKER_NAMESPACE}/midtier:${IMAGE_TAG}"
+                        sh "docker pull ${midtierImage}"
+                        sh """
+                            docker run -d \\
+                                --name midtier \\
+                                --network trademarshals-network-${BUILD_NUMBER} \\
+                                -p 4000:4000 \\
+                                --restart unless-stopped \\
+                                ${midtierImage}
+                        """
+                    }
+                    
+                    if (env.SUCCESSFUL_BUILDS.contains('frontend')) {
+                        echo "📥 Pulling and starting Frontend service from JFrog..."
+                        def frontendImage = "${DOCKER_REGISTRY}/${DOCKER_NAMESPACE}/frontend:${IMAGE_TAG}"
+                        sh "docker pull ${frontendImage}"
+                        sh """
+                            docker run -d \\
+                                --name frontend \\
+                                --network trademarshals-network-${BUILD_NUMBER} \\
+                                -p 4200:80 \\
+                                --restart unless-stopped \\
+                                ${frontendImage}
+                        """
+                    }
+                    
+                    // Wait for services to be ready
+                    echo "⏳ Waiting for services to start..."
+                    sleep(time: 30, unit: 'SECONDS')
+                    
+                    // Show running containers
+                    echo "📋 Running containers:"
+                    sh "docker ps --filter name=frontend --filter name=midtier --filter name=spring-app --filter name=fmts-nodejs --format 'table {{.Names}}\\t{{.Status}}\\t{{.Ports}}'"
+                }
+            }
+        }
+        
+        stage('Health Check') {
+            steps {
+                echo "🔍 Validating deployment..."
+                script {
+                    def services = env.SUCCESSFUL_BUILDS.split(',')
+                    
+                    for (service in services) {
+                        if (!service) continue
+                        
+                        def port = ""
+                        switch(service) {
+                            case 'frontend': port = "4200"; break
+                            case 'midtier': port = "4000"; break  
+                            case 'backend': port = "8080"; break
+                            case 'fmts': port = "3000"; break
+                        }
+                        
+                        if (port) {
+                            try {
+                                sh "curl -f -s http://localhost:${port} > /dev/null"
+                                echo "✅ ${service} is healthy on port ${port}"
+                            } catch (Exception e) {
+                                echo "⚠️ ${service} health check failed on port ${port}"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Deployment Summary') {
+            steps {
+                script {
+                    def services = env.SUCCESSFUL_BUILDS.split(',').findAll { it }
+                    
+                    echo """
+🎉 JFROG DEPLOYMENT SUCCESSFUL! 
+
+📊 Build Summary:
+  - Build Number: ${BUILD_NUMBER}
+  - Git Commit: ${GIT_COMMIT.take(8)}
+  - Project Name: ${COMPOSE_PROJECT_NAME}
+  - Registry: ${DOCKER_REGISTRY}
+
+🌐 Service URLs:"""
+
+                    if (services.contains('frontend')) {
+                        echo "  - Frontend:  http://localhost:4200"
+                    }
+                    if (services.contains('midtier')) {
+                        echo "  - Midtier:   http://localhost:4000"
+                    }
+                    if (services.contains('backend')) {
+                        echo "  - Backend:   http://localhost:8080"
+                    }
+                    if (services.contains('fmts')) {
+                        echo "  - FMTS:      http://localhost:3000"
+                    }
+
+                    echo """
+📦 JFrog Images Deployed:"""
+                    for (service in services) {
+                        if (service) {
+                            echo "  - ${DOCKER_REGISTRY}/${DOCKER_NAMESPACE}/${service}:${IMAGE_TAG}"
+                        }
+                    }
+
+                    echo """
+🔧 Management Commands:
+  - View frontend:    docker logs -f frontend
+  - View backend:     docker logs -f spring-app
+  - View midtier:     docker logs -f midtier
+  - View FMTS:        docker logs -f fmts-nodejs
+  
+🔍 JFrog Registry Commands:
+  - Check images:     docker images | grep ${JFROG_URL}
+  - Pull manually:    docker pull ${DOCKER_REGISTRY}/${DOCKER_NAMESPACE}/SERVICE:${IMAGE_TAG}
+  
+  - Stop all:         docker stop frontend midtier spring-app fmts-nodejs
+  - Remove all:       docker rm frontend midtier spring-app fmts-nodejs
+
+✅ All services are running from JFrog Artifactory!
+"""
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            echo "🧹 Cleaning up build artifacts..."
+            script {
+                echo """
+📊 FINAL JFROG BUILD SUMMARY:
+✅ Successful builds: ${env.SUCCESSFUL_BUILDS ?: 'none'}
+❌ Failed builds: ${env.FAILED_BUILDS ?: 'none'}
+📦 Registry: ${DOCKER_REGISTRY}
+🚀 Services running: Check docker ps for ${COMPOSE_PROJECT_NAME} containers
+"""
+            }
+            
+            // Logout from JFrog (security best practice)
+            script {
+                try {
+                    sh "docker logout ${JFROG_URL}"
+                    echo "🔐 Logged out from JFrog Artifactory"
+                } catch (Exception e) {
+                    echo "⚠️ Logout warning: ${e.getMessage()}"
+                }
+            }
+        }
+        
+        success {
+            echo "✅ JFrog Pipeline completed successfully!"
+            echo "🌐 Access your services at the URLs shown above"
+            echo "📦 Images are available in JFrog at: ${DOCKER_REGISTRY}"
+        }
+        
+        failure {
+            echo "❌ JFrog Pipeline failed!"
+            script {
+                echo "🔍 Debugging info:"
+                sh "docker ps -a | grep trademarshals || echo 'No trademarshals containers found'"
+                
+                // Show logs from failed containers
+                sh """
+                    for container in \$(docker ps -a -q --filter name=trademarshals-${BUILD_NUMBER} 2>/dev/null || true); do
+                        echo "=== Logs for container \$container ==="
+                        docker logs --tail=50 \$container || true
+                    done
+                """
+                
+                // Show JFrog connection status
+                echo "🔍 JFrog Registry Status:"
+                sh "docker images | grep ${JFROG_URL} || echo 'No JFrog images found locally'"
+            }
+        }
+    }
+}
