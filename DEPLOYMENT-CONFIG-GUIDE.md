@@ -17,14 +17,14 @@ The current setup deploys a 4-tier application:
 
 #### Option A: Docker Installation (Recommended)
 ```bash
-# Create Jenkins container with Docker access
+# Create Jenkins container with Docker access and persistent data
 docker run -d \
   --name jenkins-trademarshals \
   -p 9090:8080 \
   -p 50000:50000 \
-  -v jenkins_home:/var/jenkins_home \
+  -v /home/associate/jenkins-data:/var/jenkins_home \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -v /usr/bin/docker:/usr/bin/docker \
+  -v /bin/docker:/usr/bin/docker \
   --group-add $(stat -c %g /var/run/docker.sock) \
   jenkins/jenkins:lts
 ```
@@ -142,16 +142,24 @@ docker run -d --name jenkins-trademarshals -p 9090:8080 -p 50000:50000 \
 - [x] **Workspace Cleanup**: Clean workspace
 
 #### Additional Plugins (Install via Manage Jenkins > Plugins):
-```
-1. Go to: Manage Jenkins > Plugins > Available Plugins
-2. Search and install:
-   - "Docker Pipeline"
-   - "NodeJS Plugin" 
-   - "Maven Integration"
-   - "Pipeline: Stage View"
-   - "Blue Ocean" (optional, for better UI)
-   - "Credentials Binding"
-```
+
+**⚠️ CRITICAL: Install these plugins BEFORE running pipelines:**
+
+1. **Go to**: Manage Jenkins > Plugins > Available Plugins
+2. **Search and install** (check each one):
+   - ✅ **"NodeJS Plugin"** - Required for `nodejs` tool in pipeline
+   - ✅ **"Docker Pipeline"** - Required for Docker commands
+   - ✅ **"Maven Integration"** - Required for `maven` tool in pipeline
+   - ✅ **"Pipeline: Stage View"** - Better pipeline visualization
+   - ✅ **"Blue Ocean"** (optional, for modern UI)
+   - ✅ **"Credentials Binding"** - For secure credential management
+
+3. **Click "Install"** and **restart Jenkins** when prompted
+
+**Verification**: After restart, go to Manage Jenkins > Tools and verify you can configure:
+- Maven installations
+- NodeJS installations  
+- Docker installations
 
 ### 4. **Configure Tools**
 
